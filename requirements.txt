@@ -1,0 +1,10 @@
+pytesseract
+pdf2image
+camelot
+langchain
+langchain_community
+langchain_huggingface
+chromadb
+sqlite3
+google-generativeai
+streamlit
