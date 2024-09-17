@@ -8,9 +8,8 @@ from pdf2image import convert_from_path
 import io
 import os
 import sqlite3
-from langchain.schema import Document
-from datetime import datetime
-import pandas as pd
+import pandas as pd  # For handling CSV export
+from datetime import datetime  # For date handling
 
 # Configure Tesseract path
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -18,12 +17,8 @@ config = {"temperature": 0, "top_p": 0.95, "top_k": 64, "max_output_tokens": 819
 KEY = 'AIzaSyAvp9ZEf0kgQQ2uUSBZe6xMXkLKPrwcvug'
 genai.configure(api_key=KEY)
 
-logo_path = "fevicon.png"
-if os.path.exists(logo_path):
-    st.image(logo_path, width=90)
-
 # Streamlit UI
-st.title("InvoiceIQ")
+st.title("Invoice Uploader, Extractor, and Search")
 
 # Connect to SQLite Database
 conn = sqlite3.connect('invoices.db')
@@ -91,7 +86,7 @@ def convert_date_to_ddmmyyyy(date_str):
 page = st.sidebar.selectbox("Choose an option", ["Upload & Extract Invoices", "Search & Download Data"])
 
 if page == "Upload & Extract Invoices":
-    uploaded_files = st.file_uploader("Upload Invoice PDF files", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Choose multiple PDF files", type="pdf", accept_multiple_files=True)
 
     if uploaded_files is not None:
         for idx, uploaded_file in enumerate(uploaded_files):

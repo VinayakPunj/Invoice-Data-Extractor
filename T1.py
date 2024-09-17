@@ -8,9 +8,8 @@ from pdf2image import convert_from_path
 import io
 import os
 import sqlite3
-from langchain.schema import Document
-from datetime import datetime
-import pandas as pd
+import pandas as pd  # For handling CSV export
+from datetime import datetime  # For date handling
 
 # Configure Tesseract path
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -18,12 +17,8 @@ config = {"temperature": 0, "top_p": 0.95, "top_k": 64, "max_output_tokens": 819
 KEY = 'AIzaSyAvp9ZEf0kgQQ2uUSBZe6xMXkLKPrwcvug'
 genai.configure(api_key=KEY)
 
-logo_path = "fevicon.png"
-if os.path.exists(logo_path):
-    st.image(logo_path, width=90)
-
 # Streamlit UI
-st.title("InvoiceIQ")
+st.title("Invoice Uploader, Extractor, and Search")
 
 # Connect to SQLite Database
 conn = sqlite3.connect('invoices.db')
@@ -33,9 +28,12 @@ cursor = conn.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS invoices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     company_name TEXT,
-                    invoice_date DATE,
-                    total_amount DECIMAL(10, 2)
+                    invoice_date TEXT,
+                    total_amount REAL
                 )''')
+
+# Page selection
+page = st.sidebar.selectbox("Choose an option", ["Upload & Extract Invoices", "Search & Download Data"])
 
 # Function to extract text from PDF images without saving to a file
 def extract_text_from_images_directly(pdf_path, max_pages=10):
@@ -78,20 +76,9 @@ def get_model(instruction):
     )
     return model
 
-# Function to convert date from 'dd-MMM-yy' (e.g., '17-Jun-24') to 'dd-mm-yyyy'
-def convert_date_to_ddmmyyyy(date_str):
-    try:
-        # Parse date in format like '17-Jun-24'
-        return datetime.strptime(date_str, '%d-%b-%y').strftime('%d-%m-%Y')
-    except ValueError:
-        # If parsing fails, return the date as is or handle it accordingly
-        return date_str
-
 # Invoice Upload and Extraction Page
-page = st.sidebar.selectbox("Choose an option", ["Upload & Extract Invoices", "Search & Download Data"])
-
 if page == "Upload & Extract Invoices":
-    uploaded_files = st.file_uploader("Upload Invoice PDF files", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Choose multiple PDF files", type="pdf", accept_multiple_files=True)
 
     if uploaded_files is not None:
         for idx, uploaded_file in enumerate(uploaded_files):
@@ -105,7 +92,7 @@ if page == "Upload & Extract Invoices":
 
             # Define the query for LLM to extract the relevant information
             prompt = """Extract the company name, invoice date, and total amount from the invoice. 
-            Only return the required information without adding extra words or sentences.
+            Only return the required information without adding extra words or sentences. The date shouls be in the format DD-MM-YYY.
             The output should strictly follow this format:
             Company name: <company_name> Invoice date: <invoice_date> Total amount: <total_amount>
 
@@ -115,6 +102,7 @@ if page == "Upload & Extract Invoices":
             - The total amount is enclosed within `Total amount:`
             - No extra text or comments are included.
             - Use the exact field names and order as provided above.
+            - The date is in dd-mm-yyyy format.
             """
 
             instruction = """
@@ -137,10 +125,6 @@ if page == "Upload & Extract Invoices":
             invoice_date = date_match.group(1).strip() if date_match else "Unknown"
             total_amount = total_amount_match.group(1).replace(",", "") if total_amount_match else "Unknown"
 
-            # Convert the invoice date to dd-mm-yyyy format (handles '17-Jun-24')
-            if invoice_date != "Unknown":
-                invoice_date = convert_date_to_ddmmyyyy(invoice_date)
-
             if total_amount != "Unknown":
                 total_amount = float(total_amount)
 
@@ -150,13 +134,11 @@ if page == "Upload & Extract Invoices":
             invoice_date_input = st.text_input(f"Invoice Date ({uploaded_file.name})", value=invoice_date, key=f"invoice_date_{idx}")
             total_amount_input = st.number_input(f"Total Amount ({uploaded_file.name})", value=total_amount, key=f"total_amount_{idx}")
 
-            formatted_date = datetime.strptime(invoice_date_input, '%d-%m-%Y').strftime('%Y-%m-%d')
-
             # Confirmation button
             if st.button(f"Confirm for {uploaded_file.name}", key=f"confirm_{idx}"):
                 # Save the edited details to the database
                 cursor.execute('INSERT INTO invoices (company_name, invoice_date, total_amount) VALUES (?, ?, ?)',
-                               (company_name_input, formatted_date, total_amount_input))
+                               (company_name_input, invoice_date_input, total_amount_input))
 
                 conn.commit()
 
@@ -173,8 +155,8 @@ elif page == "Search & Download Data":
 
     # Search form for from date, to date, and company name
     with st.form(key="search_form"):
-        search_from_date = st.date_input("From Date (dd-mm-yyyy)")
-        search_to_date = st.date_input("To Date (dd-mm-yyyy)")
+        search_from_date = st.text_input("From Date (dd-mm-yyyy)")
+        search_to_date = st.text_input("To Date (dd-mm-yyyy)")
         search_company_name = st.text_input("Search by Company Name")
         submit_search = st.form_submit_button(label="Search")
 
@@ -183,13 +165,17 @@ elif page == "Search & Download Data":
         query = "SELECT * FROM invoices WHERE 1=1"
         params = []
 
+        # Handle date format conversion for the search query
+        def convert_to_iso(date_str):
+            return datetime.strptime(date_str, '%d-%m-%Y').strftime('%Y-%m-%d')
+
         # Add date filtering based on the "From Date" and "To Date"
         if search_from_date:
-            from_date_iso = search_from_date  # No need to convert if stored as dd-mm-yyyy
+            from_date_iso = convert_to_iso(search_from_date)
             query += " AND invoice_date >= ?"
             params.append(from_date_iso)
         if search_to_date:
-            to_date_iso = search_to_date  # No need to convert if stored as dd-mm-yyyy
+            to_date_iso = convert_to_iso(search_to_date)
             query += " AND invoice_date <= ?"
             params.append(to_date_iso)
 
