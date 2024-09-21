@@ -150,7 +150,14 @@ if page == "Upload & Extract Invoices":
             invoice_date_input = st.text_input(f"Invoice Date ({uploaded_file.name})", value=invoice_date, key=f"invoice_date_{idx}")
             total_amount_input = st.number_input(f"Total Amount ({uploaded_file.name})", value=total_amount, key=f"total_amount_{idx}")
 
-            formatted_date = datetime.strptime(invoice_date_input, '%d-%m-%Y').strftime('%Y-%m-%d')
+            if invoice_date_input == '%d.%m.%Y':
+                formatted_date = datetime.strptime(invoice_date_input, '%d.%m.%Y').strftime('%Y-%m-%d')
+            if invoice_date_input == '%d-%m-%Y':
+                formatted_date = datetime.strptime(invoice_date_input, '%d-%m-%Y').strftime('%Y-%m-%d')
+            if invoice_date_input == '%d/%m/%Y':
+                formatted_date = datetime.strptime(invoice_date_input, '%d/%m/%Y').strftime('%Y-%m-%d')
+
+
 
             # Confirmation button
             if st.button(f"Confirm for {uploaded_file.name}", key=f"confirm_{idx}"):
