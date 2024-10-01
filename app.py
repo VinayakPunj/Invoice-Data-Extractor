@@ -150,12 +150,22 @@ if page == "Upload & Extract Invoices":
             invoice_date_input = st.text_input(f"Invoice Date ({uploaded_file.name})", value=invoice_date, key=f"invoice_date_{idx}")
             total_amount_input = st.number_input(f"Total Amount ({uploaded_file.name})", value=total_amount, key=f"total_amount_{idx}")
 
-            if invoice_date_input == '%d.%m.%Y':
-                formatted_date = datetime.strptime(invoice_date_input, '%d.%m.%Y').strftime('%Y-%m-%d')
-            if invoice_date_input == '%d-%m-%Y':
-                formatted_date = datetime.strptime(invoice_date_input, '%d-%m-%Y').strftime('%Y-%m-%d')
-            if invoice_date_input == '%d/%m/%Y':
-                formatted_date = datetime.strptime(invoice_date_input, '%d/%m/%Y').strftime('%Y-%m-%d')
+            # Convert the invoice date to a proper format based on user input
+            formatted_date = invoice_date_input  # Default value if no format matches
+
+            # Try to format the date according to various possible formats
+            try:
+                # Check for different input date formats and convert them to SQL 'YYYY-MM-DD' format
+                if re.match(r'^\d{2}\.\d{2}\.\d{4}$', invoice_date_input):  # Format: 'dd.mm.yyyy'
+                    formatted_date = datetime.strptime(invoice_date_input, '%d.%m.%Y').strftime('%Y-%m-%d')
+                elif re.match(r'^\d{2}-\d{2}-\d{4}$', invoice_date_input):  # Format: 'dd-mm-yyyy'
+                    formatted_date = datetime.strptime(invoice_date_input, '%d-%m-%Y').strftime('%Y-%m-%d')
+                elif re.match(r'^\d{2}/\d{2}/\d{4}$', invoice_date_input):  # Format: 'dd/mm/yyyy'
+                    formatted_date = datetime.strptime(invoice_date_input, '%d/%m/%Y').strftime('%Y-%m-%d')
+                else:
+                    st.error(f"Unsupported date format: {invoice_date_input}")
+            except ValueError:
+                st.error(f"Invalid date format: {invoice_date_input}")
 
 
 
