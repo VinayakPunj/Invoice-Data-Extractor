@@ -1,9 +1,9 @@
 <div align="center">
 
+![InvoiceIQ Logo](fevicon.png)
+
 </div>
 <div align="center">
-
-![InvoiceIQ Logo](fevicon.png)
 ***InvoiceIQ - AI-Powered Invoice Data Extractor***
 **Professional invoice data extraction and management using AI and OCR**
 
