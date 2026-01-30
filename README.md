@@ -5,7 +5,7 @@
 </div>
 <div align="center">
   
-***InvoiceIQ - AI-Powered Invoice Data Extractor***</n>
+***InvoiceIQ - AI-Powered Invoice Data Extractor*** </n>
 **Professional invoice data extraction and management using AI and OCR**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
