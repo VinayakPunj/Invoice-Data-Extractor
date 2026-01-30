@@ -1,4 +1,4 @@
-# 📄 InvoiceIQ - AI-Powered Invoice Data Extractor
+# InvoiceIQ - AI-Powered Invoice Data Extractor
 
 <div align="center">
 
