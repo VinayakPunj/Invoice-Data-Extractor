@@ -4,6 +4,7 @@
 
 </div>
 <div align="center">
+  
 ***InvoiceIQ - AI-Powered Invoice Data Extractor***
 **Professional invoice data extraction and management using AI and OCR**
 
