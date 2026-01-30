@@ -56,12 +56,6 @@ def validate_configuration():
         st.error("⚠️ Tesseract OCR is not properly installed or configured.")
         st.info("Please install Tesseract and update the TESSERACT_CMD in your .env file.")
         st.stop()
-    
-    # Validate API key
-    if not InvoiceExtractor.validate_api_key():
-        st.error("⚠️ Google API key is not configured.")
-        st.info("Please set GOOGLE_API_KEY in your .env file.")
-        st.stop()
 
 
 def initialize_app():
@@ -69,13 +63,36 @@ def initialize_app():
     if 'initialized' not in st.session_state:
         logger.info("Initializing application")
         
+        # Initialize default state
+        if 'selected_provider' not in st.session_state:
+            st.session_state.selected_provider = Config.DEFAULT_PROVIDER
+        
+        if 'selected_model' not in st.session_state:
+            st.session_state.selected_model = Config.LLM_MODEL
+            
+        if 'google_api_key' not in st.session_state:
+            st.session_state.google_api_key = Config.GOOGLE_API_KEY
+            
+        if 'openai_api_key' not in st.session_state:
+            st.session_state.openai_api_key = Config.OPENAI_API_KEY
+
         # Initialize components
         st.session_state.db_manager = DatabaseManager()
         st.session_state.ocr_processor = OCRProcessor()
-        st.session_state.invoice_extractor = InvoiceExtractor()
+        
+        # Create initial extractor
+        provider = st.session_state.selected_provider
+        model = st.session_state.selected_model
+        api_key = st.session_state.google_api_key if provider == 'google' else st.session_state.openai_api_key
+        
+        st.session_state.invoice_extractor = InvoiceExtractor(
+            provider=provider,
+            model_name=model,
+            api_key=api_key
+        )
         st.session_state.initialized = True
         
-        logger.info("Application initialized successfully")
+        logger.info(f"Application initialized with {provider} ({model})")
 
 
 def render_header():
@@ -367,8 +384,133 @@ def render_search_page():
             logger.error(f"Search failed: {e}")
 
 
+def render_sidebar():
+    """Render sidebar with navigation and model configuration."""
+    st.sidebar.title("📋 Navigation")
+    page = st.sidebar.radio(
+        "Choose an option:",
+        ["📤 Upload & Extract Invoices", "🔍 Search & Download Data"],
+        label_visibility="collapsed"
+    )
+    
+    st.sidebar.divider()
+    st.sidebar.title("🤖 Model Configuration")
+    
+    # Provider Selection
+    providers = {
+        "google": "Google Gemini",
+        "ollama": "Ollama (Local)",
+        "openai": "OpenAI (GPT)"
+    }
+    
+    selected_provider_label = st.sidebar.selectbox(
+        "Select Provider",
+        options=list(providers.values()),
+        index=list(providers.keys()).index(st.session_state.selected_provider)
+    )
+    
+    # Get provider key from label
+    new_provider = [k for k, v in providers.items() if v == selected_provider_label][0]
+    
+    # Update provider in session state
+    if new_provider != st.session_state.selected_provider:
+        st.session_state.selected_provider = new_provider
+        # Reset model to default for provider
+        if new_provider in Config.AVAILABLE_MODELS and Config.AVAILABLE_MODELS[new_provider]:
+            st.session_state.selected_model = Config.AVAILABLE_MODELS[new_provider][0]
+        else:
+            st.session_state.selected_model = ""
+        st.rerun()
+
+    # API Key Input
+    api_key_updated = False
+    if st.session_state.selected_provider == 'google':
+        google_key = st.sidebar.text_input(
+            "Google API Key",
+            value=st.session_state.google_api_key,
+            type="password",
+            help="Enter your Google API Key. If empty, uses value from .env"
+        )
+        if google_key != st.session_state.google_api_key:
+            st.session_state.google_api_key = google_key
+            api_key_updated = True
+            
+    elif st.session_state.selected_provider == 'openai':
+        openai_key = st.sidebar.text_input(
+            "OpenAI API Key",
+            value=st.session_state.openai_api_key,
+            type="password",
+            help="Enter your OpenAI API Key. If empty, uses value from .env"
+        )
+        if openai_key != st.session_state.openai_api_key:
+            st.session_state.openai_api_key = openai_key
+            api_key_updated = True
+    
+    # Model Selection
+    available_models = []
+    
+    # Create a temporary extractor for listing models
+    temp_extractor = InvoiceExtractor(
+        provider=st.session_state.selected_provider,
+        api_key=st.session_state.google_api_key if st.session_state.selected_provider == 'google' else st.session_state.openai_api_key
+    )
+    
+    with st.sidebar:
+        with st.spinner("Fetching available models..."):
+            available_models = temp_extractor.list_available_models()
+
+    if st.session_state.selected_provider == 'ollama':
+        if not available_models:
+            st.sidebar.error("❌ Could not connect to Ollama or no models found.")
+            st.sidebar.info("Make sure Ollama is running.")
+        else:
+            st.sidebar.success(f"✓ Connected to Ollama ({len(available_models)} models)")
+    elif not available_models:
+        st.sidebar.warning(f"No models found or API key is invalid/missing.")
+
+    if available_models:
+        # Ensure current model is in available models
+        current_model = st.session_state.selected_model
+        try:
+            model_index = available_models.index(current_model) if current_model in available_models else 0
+        except ValueError:
+            model_index = 0
+            
+        new_model = st.sidebar.selectbox(
+            "Select Model",
+            options=available_models,
+            index=model_index
+        )
+        
+        if new_model != st.session_state.selected_model or api_key_updated:
+            st.session_state.selected_model = new_model
+            # Re-initialize extractor
+            api_key = st.session_state.google_api_key if st.session_state.selected_provider == 'google' else st.session_state.openai_api_key
+            st.session_state.invoice_extractor = InvoiceExtractor(
+                provider=st.session_state.selected_provider,
+                model_name=new_model,
+                api_key=api_key
+            )
+            st.toast(f"Model updated: {new_model}")
+    else:
+        if st.session_state.selected_provider != 'ollama':
+            st.sidebar.warning(f"No models available for {selected_provider_label}")
+
+    st.sidebar.divider()
+    st.sidebar.caption(f"InvoiceIQ v1.1.0")
+    st.sidebar.caption(f"Current: {st.session_state.selected_provider} ({st.session_state.selected_model})")
+    
+    return page
+
+
 def main():
     """Main application entry point."""
+    # Initialize session state for models if not exists
+    if 'selected_provider' not in st.session_state:
+        st.session_state.selected_provider = Config.DEFAULT_PROVIDER
+    if 'selected_model' not in st.session_state:
+        st.session_state.selected_model = Config.LLM_MODEL
+    
     # Validate configuration
     validate_configuration()
     
@@ -378,17 +520,8 @@ def main():
     # Render header
     render_header()
     
-    # Sidebar navigation
-    st.sidebar.title("📋 Navigation")
-    page = st.sidebar.radio(
-        "Choose an option:",
-        ["📤 Upload & Extract Invoices", "🔍 Search & Download Data"],
-        label_visibility="collapsed"
-    )
-    
-    st.sidebar.divider()
-    st.sidebar.caption(f"InvoiceIQ v1.0.0")
-    st.sidebar.caption("Powered by AI")
+    # Sidebar navigation and config
+    page = render_sidebar()
     
     # Render selected page
     if page == "📤 Upload & Extract Invoices":

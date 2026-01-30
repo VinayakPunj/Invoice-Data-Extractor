@@ -14,7 +14,7 @@
 
 ## 🌟 Features
 
-- **🤖 AI-Powered Extraction**: Uses Google Generative AI (Gemini) to intelligently extract invoice data
+- **🤖 AI-Powered Extraction**: Uses Google Generative AI (Gemini/Gemma) to intelligently extract invoice data
 - **👁️ OCR Technology**: Tesseract OCR for accurate text extraction from PDF invoices
 - **💾 Database Management**: SQLite database for persistent storage and fast querying
 - **🔍 Advanced Search**: Search by date range, company name with export to CSV/Excel
@@ -105,7 +105,19 @@ See [Docker Deployment](#docker-deployment) section.
    LOG_LEVEL=INFO
    ```
 
-3. **Verify configuration**
+3. **Configure AI Model** (optional)
+   
+   The default model is `gemini-2.0-flash-exp`. To use a different model:
+   ```env
+   # In .env file
+   LLM_MODEL=gemini-2.0-flash-exp  # Default, recommended
+   # Or use Gemma (open-source)
+   LLM_MODEL=models/gemma-2-9b-it
+   ```
+   
+   See [docs/MODEL_CONFIG.md](docs/MODEL_CONFIG.md) for all available models and configuration options.
+
+4. **Verify configuration**
    ```bash
    python -c "from config import Config; print('Configuration valid!' if not Config.validate() else Config.validate())"
    ```
@@ -259,7 +271,7 @@ Invoice-Data-Extractor/
 
 - **Frontend**: Streamlit
 - **OCR**: Tesseract, pdf2image
-- **AI**: Google Generative AI (Gemini 1.5 Flash)
+- **AI**: Google Generative AI (Gemini/Gemma models)
 - **Database**: SQLite
 - **Data Processing**: Pandas
 - **Testing**: pytest
@@ -305,6 +317,21 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 **Solution**:
 - Install Poppler (see [Prerequisites](#prerequisites))
 - Ensure `poppler/bin` is in system PATH
+
+#### LLM Model Not Found (404 Error)
+
+**Error**: `404 models/gemini-1.5-flash is not found`
+
+**Solution**:
+1. Update to the latest model in `.env`:
+   ```env
+   LLM_MODEL=gemini-2.0-flash-exp
+   ```
+2. For Gemma models, ensure you use `models/` prefix:
+   ```env
+   LLM_MODEL=models/gemma-2-9b-it
+   ```
+3. See [docs/MODEL_CONFIG.md](docs/MODEL_CONFIG.md) for all available models
 
 #### Database Locked
 

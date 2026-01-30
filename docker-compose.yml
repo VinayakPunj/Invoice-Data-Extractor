@@ -12,10 +12,14 @@ services:
       - ./Invoices:/app/Invoices
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TESSERACT_CMD=/usr/bin/tesseract
       - DATABASE_PATH=/app/data/invoices.db
       - LOG_FILE=/app/logs/app.log
       - LOG_LEVEL=INFO
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     restart: unless-stopped
