@@ -1,232 +1,405 @@
-import re
+"""
+InvoiceIQ - Professional Invoice Data Extractor
+Streamlit application for extracting and managing invoice data using AI and OCR.
+"""
 import streamlit as st
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-import pytesseract
-from PIL import Image
-from pdf2image import convert_from_path
-import io
-import os
-import sqlite3
-from langchain.schema import Document
-from datetime import datetime
 import pandas as pd
+from pathlib import Path
+from datetime import datetime
+import os
 
-# Configure Tesseract path
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-config = {"temperature": 0, "top_p": 0.95, "top_k": 64, "max_output_tokens": 8192}
-KEY = 'AIzaSyAvp9ZEf0kgQQ2uUSBZe6xMXkLKPrwcvug'
-genai.configure(api_key=KEY)
+from config import Config
+from src.database import DatabaseManager
+from src.ocr import OCRProcessor
+from src.llm import InvoiceExtractor
+from src.utils import DateParser, AmountParser, Validator
+from src.logger import setup_logger
 
-logo_path = "fevicon.png"
-if os.path.exists(logo_path):
-    st.image(logo_path, width=90)
+# Setup logging
+logger = setup_logger(__name__)
 
-# Streamlit UI
-st.title("InvoiceIQ")
+# Page configuration
+st.set_page_config(
+    page_title=Config.APP_TITLE,
+    page_icon="📄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Connect to SQLite Database
-conn = sqlite3.connect('invoices.db')
-cursor = conn.cursor()
+# Custom CSS for better UI
+st.markdown("""
+    <style>
+    .main {
+        padding: 0rem 1rem;
+    }
+    .stAlert {
+        margin-top: 1rem;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.5rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Create 'invoices' table if it doesn't exist
-cursor.execute('''CREATE TABLE IF NOT EXISTS invoices (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_name TEXT,
-                    invoice_date DATE,
-                    total_amount DECIMAL(10, 2)
-                )''')
 
-# Function to extract text from PDF images without saving to a file
-def extract_text_from_images_directly(pdf_path, max_pages=10):
-    pages = convert_from_path(pdf_path)
-    pg_cntr = 1
-    extracted_text = ""
+def validate_configuration():
+    """Validate application configuration and show warnings if needed."""
+    errors = Config.validate()
+    
+    if errors:
+        for error in errors:
+            st.error(f"⚠️ Configuration Error: {error}")
+        st.stop()
+    
+    # Validate OCR
+    if not OCRProcessor.validate_tesseract_installation():
+        st.error("⚠️ Tesseract OCR is not properly installed or configured.")
+        st.info("Please install Tesseract and update the TESSERACT_CMD in your .env file.")
+        st.stop()
+    
+    # Validate API key
+    if not InvoiceExtractor.validate_api_key():
+        st.error("⚠️ Google API key is not configured.")
+        st.info("Please set GOOGLE_API_KEY in your .env file.")
+        st.stop()
 
-    for page in pages:
-        if pg_cntr <= max_pages:
-            text = pytesseract.image_to_string(page)
-            extracted_text += text + "\n"
-            pg_cntr += 1
-        else:
-            break
-    return extracted_text
 
-def generate_text(instruction, prompt_parts):
-    model = get_model(instruction)
+def initialize_app():
+    """Initialize application components."""
+    if 'initialized' not in st.session_state:
+        logger.info("Initializing application")
+        
+        # Initialize components
+        st.session_state.db_manager = DatabaseManager()
+        st.session_state.ocr_processor = OCRProcessor()
+        st.session_state.invoice_extractor = InvoiceExtractor()
+        st.session_state.initialized = True
+        
+        logger.info("Application initialized successfully")
+
+
+def render_header():
+    """Render application header with logo and title."""
+    col1, col2 = st.columns([1, 8])
+    
+    with col1:
+        logo_path = Path("fevicon.png")
+        if logo_path.exists():
+            st.image(str(logo_path), width=80)
+    
+    with col2:
+        st.title(f"📄 {Config.APP_TITLE}")
+        st.caption("AI-Powered Invoice Data Extraction & Management")
+
+
+def render_statistics():
+    """Render statistics dashboard."""
+    stats = st.session_state.db_manager.get_statistics()
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Invoices", stats['total_invoices'])
+    
+    with col2:
+        st.metric("Total Amount", f"${stats['total_amount']:,.2f}")
+    
+    with col3:
+        st.metric("Unique Companies", stats['unique_companies'])
+
+
+def process_invoice_file(uploaded_file, idx):
+    """
+    Process a single uploaded invoice file.
+    
+    Args:
+        uploaded_file: Streamlit UploadedFile object
+        idx: Index for unique widget keys
+    """
+    st.subheader(f"📄 {uploaded_file.name}")
+    
     try:
-        response = model.generate_content(prompt_parts)
-        if response is None or not response.text:
-            if response and hasattr(response, 'candidate') and hasattr(response.candidate, 'safety_ratings'):
-                safety_ratings = response.candidate.safety_ratings
-                return f'Generation blocked due to safety ratings: {safety_ratings}'
-            else:
-                return 'No valid response generated.'
-        return response.text
-    except Exception as ex:
-        return str(ex)
-
-def get_model(instruction):
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        generation_config=config,
-        system_instruction=instruction,
-        safety_settings={
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-        }
-    )
-    return model
-
-# Function to convert date from 'dd-MMM-yy' (e.g., '17-Jun-24') to 'dd-mm-yyyy'
-def convert_date_to_ddmmyyyy(date_str):
-    try:
-        # Parse date in format like '17-Jun-24'
-        return datetime.strptime(date_str, '%d-%b-%y').strftime('%d-%m-%Y')
-    except ValueError:
-        # If parsing fails, return the date as is or handle it accordingly
-        return date_str
-
-# Invoice Upload and Extraction Page
-page = st.sidebar.selectbox("Choose an option", ["Upload & Extract Invoices", "Search & Download Data"])
-
-if page == "Upload & Extract Invoices":
-    uploaded_files = st.file_uploader("Upload Invoice PDF files", type="pdf", accept_multiple_files=True)
-
-    if uploaded_files is not None:
-        for idx, uploaded_file in enumerate(uploaded_files):
-            # Extract the text from each uploaded PDF
-            pdf_bytes = uploaded_file.read()
-            with open(uploaded_file.name, "wb") as f:
-                f.write(pdf_bytes)
-
-            # Extract text from the PDF file
-            invoice_text = extract_text_from_images_directly(uploaded_file.name)
-
-            # Define the query for LLM to extract the relevant information
-            prompt = """Extract the company name, invoice date, and total amount from the invoice. 
-            Only return the required information without adding extra words or sentences.
-            The output should strictly follow this format:
-            Company name: <company_name> Invoice date: <invoice_date> Total amount: <total_amount>
-
-            Ensure:
-            - The company name is enclosed within `Company name:`
-            - The invoice date is enclosed within `Invoice date:`
-            - The total amount is enclosed within `Total amount:`
-            - No extra text or comments are included.
-            - Use the exact field names and order as provided above.
-            """
-
-            instruction = """
-            You are an invoice examiner. Your job is to interpret the text of an invoice and extract the 
-            information from the document.
-            """
-
-            # Prompt parts: text extracted from invoice and the instruction
-            prompt_parts = [invoice_text, prompt]
-
-            # Generate structured text using the LLM
-            llm_output = generate_text(instruction, prompt_parts)
-
-            # Parse the LLM output to extract relevant information
-            company_name_match = re.search(r"Company name:\s*([^\n]+?)\s*Invoice date:", llm_output)
-            date_match = re.search(r"Invoice date:\s*([^\n]+?)\s*Total amount:", llm_output)
-            total_amount_match = re.search(r"Total amount:\s*([\d,]+\.\d{2})", llm_output)
-
-            company_name = company_name_match.group(1).strip() if company_name_match else "Unknown"
-            invoice_date = date_match.group(1).strip() if date_match else "Unknown"
-            total_amount = total_amount_match.group(1).replace(",", "") if total_amount_match else "Unknown"
-
-            # Convert the invoice date to dd-mm-yyyy format (handles '17-Jun-24')
-            if invoice_date != "Unknown":
-                invoice_date = convert_date_to_ddmmyyyy(invoice_date)
-
-            if total_amount != "Unknown":
-                total_amount = float(total_amount)
-
-            # Show the extracted values in editable input fields with unique keys
-            st.write(f"Review and edit the information for {uploaded_file.name}:")
-            company_name_input = st.text_input(f"Company Name ({uploaded_file.name})", value=company_name, key=f"company_name_{idx}")
-            invoice_date_input = st.text_input(f"Invoice Date ({uploaded_file.name})", value=invoice_date, key=f"invoice_date_{idx}")
-            total_amount_input = st.number_input(f"Total Amount ({uploaded_file.name})", value=total_amount, key=f"total_amount_{idx}")
-
-            # Convert the invoice date to a proper format based on user input
-            formatted_date = invoice_date_input  # Default value if no format matches
-
-            # Try to format the date according to various possible formats
-            try:
-                # Check for different input date formats and convert them to SQL 'YYYY-MM-DD' format
-                if re.match(r'^\d{2}\.\d{2}\.\d{4}$', invoice_date_input):  # Format: 'dd.mm.yyyy'
-                    formatted_date = datetime.strptime(invoice_date_input, '%d.%m.%Y').strftime('%Y-%m-%d')
-                elif re.match(r'^\d{2}-\d{2}-\d{4}$', invoice_date_input):  # Format: 'dd-mm-yyyy'
-                    formatted_date = datetime.strptime(invoice_date_input, '%d-%m-%Y').strftime('%Y-%m-%d')
-                elif re.match(r'^\d{2}/\d{2}/\d{4}$', invoice_date_input):  # Format: 'dd/mm/yyyy'
-                    formatted_date = datetime.strptime(invoice_date_input, '%d/%m/%Y').strftime('%Y-%m-%d')
+        # Create progress indicator
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # Step 1: Extract text using OCR
+        status_text.text("🔍 Extracting text from PDF...")
+        progress_bar.progress(25)
+        
+        pdf_bytes = uploaded_file.read()
+        
+        # Save temporarily for processing
+        temp_path = Path(uploaded_file.name)
+        with open(temp_path, "wb") as f:
+            f.write(pdf_bytes)
+        
+        invoice_text = st.session_state.ocr_processor.extract_text_from_pdf(str(temp_path))
+        
+        # Cleanup temp file
+        temp_path.unlink(missing_ok=True)
+        
+        # Step 2: Extract data using LLM
+        status_text.text("🤖 Analyzing invoice with AI...")
+        progress_bar.progress(50)
+        
+        extracted_data = st.session_state.invoice_extractor.extract_invoice_data(invoice_text)
+        
+        progress_bar.progress(75)
+        status_text.text("✅ Extraction complete!")
+        progress_bar.progress(100)
+        
+        # Step 3: Display and allow editing
+        st.success("✅ Invoice data extracted successfully!")
+        
+        with st.form(key=f"invoice_form_{idx}"):
+            st.write("**Review and edit the extracted information:**")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                company_name = st.text_input(
+                    "Company Name",
+                    value=extracted_data['company_name'],
+                    key=f"company_{idx}"
+                )
+                
+                invoice_date_str = st.text_input(
+                    "Invoice Date (DD-MM-YYYY or any format)",
+                    value=extracted_data['invoice_date'],
+                    key=f"date_{idx}",
+                    help="Supports various date formats: DD-MM-YYYY, DD/MM/YYYY, DD-Mon-YY, etc."
+                )
+            
+            with col2:
+                total_amount_str = st.text_input(
+                    "Total Amount",
+                    value=extracted_data['total_amount'],
+                    key=f"amount_{idx}",
+                    help="Enter numeric amount (currency symbols will be removed)"
+                )
+            
+            submitted = st.form_submit_button("💾 Save to Database", type="primary")
+            
+            if submitted:
+                # Validate and parse data
+                parsed_date = DateParser.parse_date(invoice_date_str)
+                parsed_amount = AmountParser.parse_amount(total_amount_str)
+                
+                errors = []
+                if not Validator.validate_company_name(company_name):
+                    errors.append("Invalid company name")
+                if not parsed_date:
+                    errors.append(f"Invalid date format: {invoice_date_str}")
+                if parsed_amount is None:
+                    errors.append(f"Invalid amount: {total_amount_str}")
+                
+                if errors:
+                    for error in errors:
+                        st.error(f"❌ {error}")
                 else:
-                    st.error(f"Unsupported date format: {invoice_date_input}")
-            except ValueError:
-                st.error(f"Invalid date format: {invoice_date_input}")
+                    # Save to database
+                    try:
+                        invoice_id = st.session_state.db_manager.insert_invoice(
+                            company_name=company_name,
+                            invoice_date=parsed_date,
+                            total_amount=parsed_amount
+                        )
+                        st.success(f"✅ Invoice saved successfully! (ID: {invoice_id})")
+                        logger.info(f"Invoice {invoice_id} saved for {company_name}")
+                    except Exception as e:
+                        st.error(f"❌ Error saving invoice: {e}")
+                        logger.error(f"Failed to save invoice: {e}")
+        
+        # Cleanup
+        progress_bar.empty()
+        status_text.empty()
+        
+    except Exception as e:
+        st.error(f"❌ Error processing {uploaded_file.name}: {str(e)}")
+        logger.error(f"Error processing file {uploaded_file.name}: {e}")
 
 
+def render_upload_page():
+    """Render the invoice upload and extraction page."""
+    st.header("📤 Upload & Extract Invoices")
+    
+    st.info("💡 Upload one or more invoice PDFs. The AI will automatically extract company name, date, and amount.")
+    
+    uploaded_files = st.file_uploader(
+        "Choose invoice PDF files",
+        type=["pdf"],
+        accept_multiple_files=True,
+        help="Select one or more PDF invoice files to process"
+    )
+    
+    if uploaded_files:
+        st.write(f"**Processing {len(uploaded_files)} file(s)**")
+        
+        for idx, uploaded_file in enumerate(uploaded_files):
+            with st.expander(f"📄 {uploaded_file.name}", expanded=True):
+                process_invoice_file(uploaded_file, idx)
+            
+            if idx < len(uploaded_files) - 1:
+                st.divider()
 
-            # Confirmation button
-            if st.button(f"Confirm for {uploaded_file.name}", key=f"confirm_{idx}"):
-                # Save the edited details to the database
-                cursor.execute('INSERT INTO invoices (company_name, invoice_date, total_amount) VALUES (?, ?, ?)',
-                               (company_name_input, formatted_date, total_amount_input))
 
-                conn.commit()
-
-                # Success message for each file
-                st.success(f"Invoice details for {uploaded_file.name} have been saved to the database.")
-
-            # Add space between invoices
-            st.divider()  # Add a horizontal line
-            st.write("")  # Add extra space
-
-# Search and Download Page
-elif page == "Search & Download Data":
-    st.header("Search Invoices")
-
-    # Search form for from date, to date, and company name
+def render_search_page():
+    """Render the search and download page."""
+    st.header("🔍 Search & Download Data")
+    
+    # Statistics
+    render_statistics()
+    st.divider()
+    
+    # Search form
     with st.form(key="search_form"):
-        search_from_date = st.date_input("From Date (dd-mm-yyyy)")
-        search_to_date = st.date_input("To Date (dd-mm-yyyy)")
-        search_company_name = st.text_input("Search by Company Name")
-        submit_search = st.form_submit_button(label="Search")
+        st.subheader("Search Filters")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            from_date = st.date_input(
+                "From Date",
+                value=None,
+                help="Optional: Filter invoices from this date onwards"
+            )
+        
+        with col2:
+            to_date = st.date_input(
+                "To Date",
+                value=None,
+                help="Optional: Filter invoices up to this date"
+            )
+        
+        with col3:
+            company_name = st.text_input(
+                "Company Name",
+                placeholder="Enter company name...",
+                help="Optional: Search by company name (partial match)"
+            )
+        
+        col_btn1, col_btn2 = st.columns([1, 5])
+        
+        with col_btn1:
+            search_button = st.form_submit_button("🔍 Search", type="primary")
+        
+        with col_btn2:
+            clear_button = st.form_submit_button("🔄 Clear & Show All")
+    
+    # Process search
+    if search_button or clear_button:
+        # Prepare search parameters
+        from_date_str = from_date.strftime('%Y-%m-%d') if from_date and not clear_button else None
+        to_date_str = to_date.strftime('%Y-%m-%d') if to_date and not clear_button else None
+        company_filter = company_name.strip() if company_name and not clear_button else None
+        
+        # Validate date range
+        if from_date_str and to_date_str:
+            if not DateParser.validate_date_range(from_date_str, to_date_str):
+                st.error("❌ Invalid date range: 'From Date' must be before or equal to 'To Date'")
+                return
+        
+        # Search database
+        try:
+            results = st.session_state.db_manager.search_invoices(
+                from_date=from_date_str,
+                to_date=to_date_str,
+                company_name=company_filter
+            )
+            
+            if results:
+                st.success(f"✅ Found {len(results)} invoice(s)")
+                
+                # Create DataFrame
+                df = pd.DataFrame(
+                    results,
+                    columns=["ID", "Company Name", "Invoice Date", "Total Amount"]
+                )
+                
+                # Format amount column
+                df['Total Amount'] = df['Total Amount'].apply(lambda x: f"${x:,.2f}")
+                
+                # Display table
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                # Download options
+                st.subheader("📥 Download Results")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # CSV download
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="📄 Download as CSV",
+                        data=csv,
+                        file_name=f"invoices_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+                
+                with col2:
+                    # Excel download (if openpyxl available)
+                    try:
+                        from io import BytesIO
+                        buffer = BytesIO()
+                        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                            df.to_excel(writer, index=False, sheet_name='Invoices')
+                        
+                        st.download_button(
+                            label="📊 Download as Excel",
+                            data=buffer.getvalue(),
+                            file_name=f"invoices_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    except ImportError:
+                        st.caption("Excel export requires openpyxl package")
+            
+            else:
+                st.warning("📭 No invoices found matching your criteria")
+                
+        except Exception as e:
+            st.error(f"❌ Search error: {e}")
+            logger.error(f"Search failed: {e}")
 
-    # If search is submitted, query the database
-    if submit_search:
-        query = "SELECT * FROM invoices WHERE 1=1"
-        params = []
 
-        # Add date filtering based on the "From Date" and "To Date"
-        if search_from_date:
-            from_date_iso = search_from_date  # No need to convert if stored as dd-mm-yyyy
-            query += " AND invoice_date >= ?"
-            params.append(from_date_iso)
-        if search_to_date:
-            to_date_iso = search_to_date  # No need to convert if stored as dd-mm-yyyy
-            query += " AND invoice_date <= ?"
-            params.append(to_date_iso)
+def main():
+    """Main application entry point."""
+    # Validate configuration
+    validate_configuration()
+    
+    # Initialize app
+    initialize_app()
+    
+    # Render header
+    render_header()
+    
+    # Sidebar navigation
+    st.sidebar.title("📋 Navigation")
+    page = st.sidebar.radio(
+        "Choose an option:",
+        ["📤 Upload & Extract Invoices", "🔍 Search & Download Data"],
+        label_visibility="collapsed"
+    )
+    
+    st.sidebar.divider()
+    st.sidebar.caption(f"InvoiceIQ v1.0.0")
+    st.sidebar.caption("Powered by AI")
+    
+    # Render selected page
+    if page == "📤 Upload & Extract Invoices":
+        render_upload_page()
+    else:
+        render_search_page()
 
-        # Add company name filtering
-        if search_company_name:
-            query += " AND company_name LIKE ?"
-            params.append(f"%{search_company_name}%")
 
-        # Execute the query
-        cursor.execute(query, params)
-        results = cursor.fetchall()
-
-        # Display the results
-        if results:
-            st.write("Search Results:")
-            df = pd.DataFrame(results, columns=["ID", "Company Name", "Invoice Date", "Total Amount"])
-            st.dataframe(df)
-
-            # Provide an option to download the search results as CSV
-            csv = df.to_csv(index=False)
-            st.download_button(label="Download CSV", data=csv, file_name="invoice_search_results.csv", mime="text/csv")
-        else:
-            st.write("No results found for the given criteria.")
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        logger.critical(f"Application crashed: {e}", exc_info=True)
+        st.error(f"❌ Application Error: {e}")

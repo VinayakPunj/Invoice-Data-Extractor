@@ -1,10 +1,29 @@
-pytesseract
-pdf2image
-camelot
-langchain
-langchain_community
-langchain_huggingface
-chromadb
-sqlite3
-google-generativeai
-streamlit
+# Invoice Data Extractor - Requirements
+
+# Core Dependencies
+streamlit==1.32.0
+google-generativeai==0.4.0
+python-dotenv==1.0.1
+
+# OCR Dependencies
+pytesseract==0.3.10
+pdf2image==1.17.0
+Pillow==10.2.0
+
+# Database
+# sqlite3 is built into Python
+
+# Data Processing
+pandas==2.2.0
+openpyxl==3.1.2
+
+# Development Dependencies (optional)
+pytest==8.0.0
+pytest-cov==4.1.0
+flake8==7.0.0
+black==24.2.0
+
+# Pin important transitive dependencies for security
+certifi>=2023.7.22
+urllib3>=2.0.7
+requests>=2.31.0

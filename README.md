@@ -1,2 +1,364 @@
-# Invoice-Data-Extractor
- This app extracts the data from the invoice pdf and store it in a database
+# 📄 InvoiceIQ - AI-Powered Invoice Data Extractor
+
+<div align="center">
+
+![InvoiceIQ Logo](fevicon.png)
+
+**Professional invoice data extraction and management using AI and OCR**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.32.0-FF4B4B.svg)](https://streamlit.io)
+
+</div>
+
+## 🌟 Features
+
+- **🤖 AI-Powered Extraction**: Uses Google Generative AI (Gemini) to intelligently extract invoice data
+- **👁️ OCR Technology**: Tesseract OCR for accurate text extraction from PDF invoices
+- **💾 Database Management**: SQLite database for persistent storage and fast querying
+- **🔍 Advanced Search**: Search by date range, company name with export to CSV/Excel
+- **📊 Statistics Dashboard**: Real-time insights into invoice data
+- **🎨 Modern UI**: Clean, professional Streamlit interface with progress indicators
+- **🐳 Docker Ready**: Containerized deployment for easy scaling
+- **✅ Production Ready**: Comprehensive logging, error handling, and testing
+- **🔒 Secure**: Environment-based configuration, no hardcoded credentials
+
+## 📋 Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Docker Deployment](#docker-deployment)
+- [Testing](#testing)
+- [Architecture](#architecture)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+## 🔧 Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Python 3.11 or higher**
+- **Tesseract OCR** ([Installation Guide](https://github.com/tesseract-ocr/tesseract))
+  - Windows: Download from [GitHub releases](https://github.com/UB-Mannheim/tesseract/wiki)
+  - macOS: `brew install tesseract`
+  - Linux: `sudo apt-get install tesseract-ocr`
+- **Poppler** (for PDF processing)
+  - Windows: Download from [poppler releases](https://github.com/oschwartz10612/poppler-windows/releases)
+  - macOS: `brew install poppler`
+  - Linux: `sudo apt-get install poppler-utils`
+- **Google Generative AI API Key** ([Get one here](https://makersuite.google.com/app/apikey))
+
+## 📦 Installation
+
+### Option 1: Standard Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/VinayakPunj/Invoice-Data-Extractor.git
+   cd Invoice-Data-Extractor
+   ```
+
+2. **Create a virtual environment**
+   ```bash
+   python -m venv venv
+   
+   # Activate on Windows
+   venv\Scripts\activate
+   
+   # Activate on macOS/Linux
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set up configuration** (see [Configuration](#configuration) section)
+
+### Option 2: Docker Installation
+
+See [Docker Deployment](#docker-deployment) section.
+
+## ⚙️ Configuration
+
+1. **Copy the environment template**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit the `.env` file** with your settings:
+   ```env
+   # Required
+   GOOGLE_API_KEY=your_google_api_key_here
+   
+   # Optional (defaults provided)
+   TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe  # Windows
+   # TESSERACT_CMD=/usr/bin/tesseract  # Linux
+   # TESSERACT_CMD=/usr/local/bin/tesseract  # macOS
+   
+   DATABASE_PATH=invoices.db
+   LOG_LEVEL=INFO
+   ```
+
+3. **Verify configuration**
+   ```bash
+   python -c "from config import Config; print('Configuration valid!' if not Config.validate() else Config.validate())"
+   ```
+
+## 🚀 Usage
+
+### Starting the Application
+
+```bash
+streamlit run app.py
+```
+
+The application will open in your default browser at `http://localhost:8501`
+
+### Using the Application
+
+#### 1. **Upload & Extract Invoices**
+
+- Click "Upload & Extract Invoices" in the sidebar
+- Upload one or more PDF invoice files
+- The AI will automatically extract:
+  - Company Name
+  - Invoice Date
+  - Total Amount
+- Review and edit the extracted data if needed
+- Click "Save to Database" to store the invoice
+
+#### 2. **Search & Download Data**
+
+- Click "Search & Download Data" in the sidebar
+- View statistics: total invoices, total amount, unique companies
+- Use filters to search:
+  - Date range (from/to dates)
+  - Company name (partial match)
+- Export results as CSV or Excel
+
+### Supported Date Formats
+
+The application automatically recognizes various date formats:
+- `DD-MM-YYYY` (17-06-2024)
+- `DD.MM.YYYY` (17.06.2024)
+- `DD/MM/YYYY` (17/06/2024)
+- `DD-Mon-YY` (17-Jun-24)
+- `Month DD, YYYY` (June 17, 2024)
+- And more...
+
+## 🐳 Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+1. **Create `.env` file** with your configuration
+
+2. **Start the application**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Access the application** at `http://localhost:8501`
+
+4. **View logs**
+   ```bash
+   docker-compose logs -f
+   ```
+
+5. **Stop the application**
+   ```bash
+   docker-compose down
+   ```
+
+### Using Docker Only
+
+```bash
+# Build
+docker build -t invoice-extractor .
+
+# Run
+docker run -p 8501:8501 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  -e GOOGLE_API_KEY=your_key_here \
+  invoice-extractor
+```
+
+## 🧪 Testing
+
+### Run All Tests
+
+```bash
+pytest
+```
+
+### Run Specific Test Suite
+
+```bash
+# Database tests
+pytest tests/test_database.py
+
+# Utility tests
+pytest tests/test_utils.py
+```
+
+### Run with Coverage
+
+```bash
+pytest --cov=src --cov-report=html
+```
+
+### Code Quality
+
+```bash
+# Linting
+flake8 src tests
+
+# Formatting
+black src tests
+```
+
+## 🏗️ Architecture
+
+### Project Structure
+
+```
+Invoice-Data-Extractor/
+├── src/                      # Source code modules
+│   ├── __init__.py
+│   ├── database.py          # Database operations
+│   ├── ocr.py               # OCR processing
+│   ├── llm.py               # LLM integration
+│   ├── utils.py             # Utility functions
+│   └── logger.py            # Logging configuration
+├── tests/                   # Test suite
+│   ├── __init__.py
+│   ├── test_database.py
+│   └── test_utils.py
+├── docs/                    # Documentation
+│   ├── ARCHITECTURE.md
+│   ├── CONTRIBUTING.md
+│   └── API.md
+├── .github/
+│   └── workflows/
+│       └── ci.yml           # CI/CD pipeline
+├── app.py                   # Main Streamlit application
+├── config.py                # Configuration management
+├── requirements.txt         # Python dependencies
+├── Dockerfile              # Docker configuration
+├── docker-compose.yml      # Docker Compose setup
+└── .env.example            # Environment template
+```
+
+### Technology Stack
+
+- **Frontend**: Streamlit
+- **OCR**: Tesseract, pdf2image
+- **AI**: Google Generative AI (Gemini 1.5 Flash)
+- **Database**: SQLite
+- **Data Processing**: Pandas
+- **Testing**: pytest
+- **Containerization**: Docker
+
+### Data Flow
+
+1. **Upload** → PDF file uploaded via Streamlit UI
+2. **OCR** → Tesseract extracts text from PDF pages
+3. **AI Processing** → Gemini analyzes text and extracts structured data
+4. **Validation** → Data validation and date/amount parsing
+5. **Storage** → Persisted to SQLite database
+6. **Retrieval** → Search and export functionality
+
+For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### Tesseract Not Found
+
+**Error**: `TesseractNotFoundError`
+
+**Solution**:
+1. Verify Tesseract is installed: `tesseract --version`
+2. Update `TESSERACT_CMD` in `.env` with correct path
+3. Ensure Tesseract is in system PATH
+
+#### Google API Key Error
+
+**Error**: `Google API key is not configured`
+
+**Solution**:
+1. Get API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Add to `.env` file: `GOOGLE_API_KEY=your_key_here`
+3. Restart the application
+
+#### PDF Conversion Error
+
+**Error**: `PDFInfoNotInstalledError`
+
+**Solution**:
+- Install Poppler (see [Prerequisites](#prerequisites))
+- Ensure `poppler/bin` is in system PATH
+
+#### Database Locked
+
+**Error**: `database is locked`
+
+**Solution**:
+- Close other connections to the database
+- Check file permissions
+- Use Docker volume for multi-user scenarios
+
+### Logging
+
+Check application logs for detailed error information:
+
+```bash
+# View logs
+tail -f app.log
+
+# Docker logs
+docker-compose logs -f
+```
+
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
+
+### Quick Start for Contributors
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes
+4. Run tests: `pytest`
+5. Commit: `git commit -m 'Add amazing feature'`
+6. Push: `git push origin feature/amazing-feature`
+7. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR capabilities
+- [Google Generative AI](https://ai.google.dev/) for intelligent data extraction
+- [Streamlit](https://streamlit.io/) for the amazing UI framework
+
+## 📧 Contact
+
+**Vinayak Punj** - [@VinayakPunj](https://github.com/VinayakPunj)
+
+Project Link: [https://github.com/VinayakPunj/Invoice-Data-Extractor](https://github.com/VinayakPunj/Invoice-Data-Extractor)
+
+---
+
+<div align="center">
+Made with ❤️ by Vinayak Punj
+</div>
