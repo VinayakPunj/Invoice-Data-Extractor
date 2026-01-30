@@ -14,24 +14,25 @@
 
 ## 🌟 Features
 
-- **🤖 AI-Powered Extraction**: Uses Google Generative AI (Gemini/Gemma) to intelligently extract invoice data
-- **👁️ OCR Technology**: Tesseract OCR for accurate text extraction from PDF invoices
+- **🤖 AI-Powered Extraction**: Intelligently extracts invoice data using multiple LLM providers.
+- **🔌 Multi-Provider Support**: Choose between **Google Gemini**, **OpenAI (GPT)**, or local **Ollama** models.
+- **🏠 Local LLM Support**: Process invoices 100% locally using Ollama for privacy and cost savings.
+- **👁️ OCR Technology**: Tesseract OCR for accurate text extraction from PDF invoices.
 - **💾 Database Management**: SQLite database for persistent storage and fast querying
 - **🔍 Advanced Search**: Search by date range, company name with export to CSV/Excel
 - **📊 Statistics Dashboard**: Real-time insights into invoice data
-- **🎨 Modern UI**: Clean, professional Streamlit interface with progress indicators
-- **🐳 Docker Ready**: Containerized deployment for easy scaling
-- **✅ Production Ready**: Comprehensive logging, error handling, and testing
-- **🔒 Secure**: Environment-based configuration, no hardcoded credentials
+- **🎨 Modern UI**: Clean, professional Streamlit interface with dynamic model selection and progress indicators.
+- **🐳 Docker Ready**: Containerized deployment with host machine connectivity for local models.
+- **🔒 Secure**: Manage API keys directly in the UI; no hardcoded credentials.
 
 ## 📋 Table of Contents
 
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Model Selection](#model-selection)
 - [Usage](#usage)
 - [Docker Deployment](#docker-deployment)
-- [Testing](#testing)
 - [Architecture](#architecture)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -105,22 +106,21 @@ See [Docker Deployment](#docker-deployment) section.
    LOG_LEVEL=INFO
    ```
 
-3. **Configure AI Model** (optional)
-   
-   The default model is `gemini-2.0-flash-exp`. To use a different model:
-   ```env
-   # In .env file
-   LLM_MODEL=gemini-2.0-flash-exp  # Default, recommended
-   # Or use Gemma (open-source)
-   LLM_MODEL=models/gemma-2-9b-it
-   ```
-   
-   See [docs/MODEL_CONFIG.md](docs/MODEL_CONFIG.md) for all available models and configuration options.
-
-4. **Verify configuration**
+3. **Verification** (Optional)
    ```bash
-   python -c "from config import Config; print('Configuration valid!' if not Config.validate() else Config.validate())"
+   python -c "from config import Config; print('Environment loaded!' if not Config.validate() else Config.validate())"
    ```
+
+## 🤖 Model Selection
+
+InvoiceIQ allows you to choose your preferred AI provider directly from the sidebar:
+
+- **Google Gemini**: Reliable cloud-based extraction.
+- **OpenAI**: Industry-standard GPT models.
+- **Ollama**: Run open-source models (Llama 3, Gemma 2, etc.) locally on your machine.
+
+> [!TIP]
+> **Ollama Users**: Read the [Ollama Setup Guide](docs/OLLAMA_SETUP.md) for instructions on how to run and connect local models.
 
 ## 🚀 Usage
 
@@ -154,15 +154,7 @@ The application will open in your default browser at `http://localhost:8501`
   - Company name (partial match)
 - Export results as CSV or Excel
 
-### Supported Date Formats
 
-The application automatically recognizes various date formats:
-- `DD-MM-YYYY` (17-06-2024)
-- `DD.MM.YYYY` (17.06.2024)
-- `DD/MM/YYYY` (17/06/2024)
-- `DD-Mon-YY` (17-Jun-24)
-- `Month DD, YYYY` (June 17, 2024)
-- And more...
 
 ## 🐳 Docker Deployment
 
@@ -201,39 +193,7 @@ docker run -p 8501:8501 \
   invoice-extractor
 ```
 
-## 🧪 Testing
 
-### Run All Tests
-
-```bash
-pytest
-```
-
-### Run Specific Test Suite
-
-```bash
-# Database tests
-pytest tests/test_database.py
-
-# Utility tests
-pytest tests/test_utils.py
-```
-
-### Run with Coverage
-
-```bash
-pytest --cov=src --cov-report=html
-```
-
-### Code Quality
-
-```bash
-# Linting
-flake8 src tests
-
-# Formatting
-black src tests
-```
 
 ## 🏗️ Architecture
 
@@ -248,10 +208,7 @@ Invoice-Data-Extractor/
 │   ├── llm.py               # LLM integration
 │   ├── utils.py             # Utility functions
 │   └── logger.py            # Logging configuration
-├── tests/                   # Test suite
-│   ├── __init__.py
-│   ├── test_database.py
-│   └── test_utils.py
+├── tests/                   # Optional unit tests
 ├── docs/                    # Documentation
 │   ├── ARCHITECTURE.md
 │   ├── CONTRIBUTING.md
@@ -271,17 +228,16 @@ Invoice-Data-Extractor/
 
 - **Frontend**: Streamlit
 - **OCR**: Tesseract, pdf2image
-- **AI**: Google Generative AI (Gemini/Gemma models)
+- **AI**: Google Gemini, OpenAI (GPT), Ollama (Local)
 - **Database**: SQLite
 - **Data Processing**: Pandas
-- **Testing**: pytest
 - **Containerization**: Docker
 
 ### Data Flow
 
 1. **Upload** → PDF file uploaded via Streamlit UI
 2. **OCR** → Tesseract extracts text from PDF pages
-3. **AI Processing** → Gemini analyzes text and extracts structured data
+3. **AI Processing** → AI model analyzes text and extracts structured data
 4. **Validation** → Data validation and date/amount parsing
 5. **Storage** → Persisted to SQLite database
 6. **Retrieval** → Search and export functionality
@@ -363,10 +319,9 @@ We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidel
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make your changes
-4. Run tests: `pytest`
-5. Commit: `git commit -m 'Add amazing feature'`
-6. Push: `git push origin feature/amazing-feature`
-7. Open a Pull Request
+4. Commit: `git commit -m 'Add amazing feature'`
+5. Push: `git push origin feature/amazing-feature`
+6. Open a Pull Request
 
 ## 📄 License
 

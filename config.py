@@ -37,17 +37,9 @@ class Config:
     
     # Provider-specific models
     AVAILABLE_MODELS = {
-        'google': [
-            'gemini-2.0-flash-exp',
-            'gemini-1.5-pro',
-            'gemini-1.5-flash',
-        ],
+        'google': [],
         'ollama': [], # Will be populated dynamically by OllamaClient
-        'openai': [
-            'gpt-4o',
-            'gpt-4-turbo',
-            'gpt-3.5-turbo',
-        ]
+        'openai': []
     }
     
     # API Keys (can be provided via .env or overridden in UI)

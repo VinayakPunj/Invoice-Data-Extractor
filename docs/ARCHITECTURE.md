@@ -141,7 +141,7 @@ CREATE TABLE invoices (
 - `Validator`: Data validation
 
 **Features**:
-- 10+ supported date formats
+- All date formats supported
 - Multiple currency formats
 - Comprehensive validation rules
 
@@ -321,13 +321,3 @@ except SpecificError as e:
 - Error rates
 - Success rates
 
-## Future Architecture Improvements
-
-1. **Microservices**: Split OCR, LLM, DB into services
-2. **Message Queue**: Async processing with RabbitMQ/Redis
-3. **API Layer**: REST API for programmatic access
-4. **Authentication**: User management and roles
-5. **Multi-tenancy**: Support multiple organizations
-6. **Cloud Storage**: S3/GCS for files
-7. **Monitoring**: Prometheus + Grafana
-8. **Caching**: Redis for frequently accessed data
