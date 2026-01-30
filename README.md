@@ -1,10 +1,10 @@
 <div align="center">
-# InvoiceIQ - AI-Powered Invoice Data Extractor
+
 </div>
 <div align="center">
 
 ![InvoiceIQ Logo](fevicon.png)
-
+***InvoiceIQ - AI-Powered Invoice Data Extractor***
 **Professional invoice data extraction and management using AI and OCR**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
