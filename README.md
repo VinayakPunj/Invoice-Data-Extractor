@@ -1,6 +1,6 @@
 <div align="center">
-#InvoiceIQ - AI-Powered Invoice Data Extractor
-
+# InvoiceIQ - AI-Powered Invoice Data Extractor
+</div>
 <div align="center">
 
 ![InvoiceIQ Logo](fevicon.png)
